@@ -1,0 +1,18 @@
+[package]
+name = "dulog"
+version = "0.1.0"
+edition = "2021"
+description = "大日志检索工具：本地 mmap + SSH 远程，支持超大文件与高亮"
+authors = ["dulog"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+memmap2 = "0.9"
+tokio = { version = "1", features = ["full"] }
