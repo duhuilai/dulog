@@ -25,7 +25,7 @@ export function ConnectionDialog({ onClose, onConnected, editConnection }: Props
   const [authMethod, setAuthMethod] = useState<"password" | "key">(
     editConnection?.key_path ? "key" : "password"
   );
-  const [saveConn, setSaveConn] = useState(!isEdit || true);
+  const [saveConn, setSaveConn] = useState<boolean>(true);
   const [savePass, setSavePass] = useState(!!editConnection?.password);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
