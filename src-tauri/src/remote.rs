@@ -48,7 +48,10 @@ pub async fn connect(
     key_path: Option<&str>,
 ) -> Result<SshSession, String> {
     let config = Arc::new(Config {
-        inactivity_timeout: Some(std::time::Duration::from_secs(60)),
+        // 不设置客户端主动回收时间，避免在列表/打开之间被强制断开。
+        inactivity_timeout: None,
+        // 每 30 秒发送一次 keepalive，防止 NAT/防火墙/服务器因空闲断开。
+        keepalive_interval: Some(std::time::Duration::from_secs(30)),
         ..Default::default()
     });
 
@@ -88,6 +91,9 @@ pub async fn connect(
 async fn ssh_run(session: &SshSession, command: &str) -> Result<String, String> {
     let mut channel = {
         let handle = session.handle.lock().await;
+        if handle.is_closed() {
+            return Err("SSH 连接已断开，请重新连接".into());
+        }
         handle
             .channel_open_session()
             .await
@@ -113,6 +119,10 @@ async fn ssh_run(session: &SshSession, command: &str) -> Result<String, String> 
             _ => {}
         }
     }
+
+    // 显式发送 EOF 与 Close，确保服务器端通道完整关闭，避免后续请求失败。
+    let _ = channel.eof().await;
+    let _ = channel.close().await;
 
     if let Some(code) = exit_code {
         if code != 0 {
