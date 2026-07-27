@@ -333,7 +333,7 @@ async fn search(
 }
 
 // ===================== 诊断命令 =====================
-/// 临时诊断：直接测试 ssh 连接，返回完整 stdout + stderr
+/// 使用内置 russh 测试 SSH 连接与远程命令执行。
 #[tauri::command]
 async fn ssh_diag(
     host: String,
@@ -341,76 +341,30 @@ async fn ssh_diag(
     user: String,
     password: String,
 ) -> Result<String, String> {
-    let ssh_bin = remote::find_ssh_diag()?;
-    let destination = format!("{}@{}", user, host);
-    let pid = std::process::id();
+    let mut info = String::new();
+    info.push_str("=== DuLog SSH 诊断 ===\n");
+    info.push_str(&format!("目标: {}@{}:{}\n", user, host, port));
+    info.push_str("使用内置 russh SSH 库（纯 Rust 实现），无需外部 ssh 客户端\n\n");
 
-    // 创建 ASKPASS
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let pw_name = format!("dulog-diag-pw-{}-{}.txt", pid, timestamp);
-    let bat_name = format!("dulog-diag-askpass-{}-{}.bat", pid, timestamp);
-
-    let mut pw_file = std::env::temp_dir();
-    pw_file.push(&pw_name);
-    std::fs::write(&pw_file, password.as_bytes()).map_err(|e| format!("写入密码: {e}"))?;
-
-    let mut bat_file = std::env::temp_dir();
-    bat_file.push(&bat_name);
-    let bat_content = format!("@echo off\r\ntype \"{}\"\r\n", pw_file.display());
-    std::fs::write(&bat_file, &bat_content).map_err(|e| format!("写入 askpass: {e}"))?;
-
-    let mut empty_cfg = std::env::temp_dir();
-    empty_cfg.push(format!("dulog-diag-cfg-{}-{}.empty", pid, timestamp));
-    std::fs::write(&empty_cfg, "").map_err(|e| format!("写入空配置: {e}"))?;
-
-    let mut cmd = tokio::process::Command::new(&ssh_bin);
-    cmd.arg("-F").arg(empty_cfg.display().to_string().replace('\\', "/"))
-        .arg("-o").arg("StrictHostKeyChecking=accept-new")
-        .arg("-o").arg("UserKnownHostsFile=NUL")
-        .arg("-o").arg("ConnectTimeout=10")
-        .arg("-o").arg("BatchMode=no")
-        .arg("-o").arg("PubkeyAuthentication=no")
-        .arg("-o").arg("PreferredAuthentications=password")
-        .arg("-p").arg(port.to_string())
-        .arg("-v")  // debug 模式
-        .env("SSH_ASKPASS", bat_file.display().to_string().replace('\\', "/"))
-        .env("SSH_ASKPASS_REQUIRE", "force")
-        .env("DISPLAY", ":0")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-
-    cmd.arg(&destination);
-    cmd.arg("echo");
-    cmd.arg("DIAG_OK");
-
-    let out = tokio::time::timeout(
-        std::time::Duration::from_secs(15),
-        cmd.output(),
-    ).await;
-
-    // 清理
-    let _ = std::fs::remove_file(&pw_file);
-    let _ = std::fs::remove_file(&bat_file);
-    let _ = std::fs::remove_file(&empty_cfg);
-
-    match out {
-        Ok(Ok(output)) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            Ok(format!(
-                "Exit: {}\n--- STDOUT ---\n{}\n--- STDERR ---\n{}\n--- END ---",
-                output.status.code().unwrap_or(-1),
-                stdout,
-                stderr,
-            ))
+    match remote::connect(&host, port, &user, Some(&password), None).await {
+        Ok(session) => {
+            info.push_str("✓ SSH 连接成功\n");
+            match remote::ssh_run_test(&session).await {
+                Ok(out) => {
+                    info.push_str("✓ 远程命令执行成功\n");
+                    info.push_str(&format!("远程 echo 输出: {}", out.trim_end()));
+                }
+                Err(e) => {
+                    info.push_str(&format!("✗ 远程命令执行失败: {e}"));
+                }
+            }
         }
-        Ok(Err(e)) => Err(format!("spawn 失败: {e}")),
-        Err(_) => Err("命令超时（15 秒）".into()),
+        Err(e) => {
+            info.push_str(&format!("✗ SSH 连接失败: {e}"));
+        }
     }
+
+    Ok(info)
 }
 
 #[tauri::command]
