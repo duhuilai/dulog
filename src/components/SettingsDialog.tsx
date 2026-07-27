@@ -43,7 +43,7 @@ export function SettingsDialog({ onClose }: Props) {
     setStage("checking");
     setErrorMsg("");
     try {
-      const info = await api.checkUpdate();
+      const info = await api.checkUpdate(currentVersion || undefined);
       setUpdateInfo(info);
       if (info.has_update) {
         setStage("available");
@@ -54,7 +54,7 @@ export function SettingsDialog({ onClose }: Props) {
       setErrorMsg(String(e));
       setStage("error");
     }
-  }, []);
+  }, [currentVersion]);
 
   // ---- 下载更新 ----
   const doDownload = useCallback(async () => {

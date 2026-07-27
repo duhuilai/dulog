@@ -1,6 +1,6 @@
 [package]
 name = "dulog"
-version = "0.1.2"
+version = "0.1.6"
 edition = "2021"
 description = "大日志检索工具：本地 mmap + SSH 远程，支持超大文件与高亮"
 authors = ["dulog"]

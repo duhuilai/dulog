@@ -89,7 +89,7 @@ const GITHUB_API: &str =
     "https://api.github.com/repos/duhuilai/dulog/releases/latest";
 
 #[tauri::command]
-pub async fn check_update() -> Result<UpdateInfo, String> {
+pub async fn check_update(current_ver: Option<String>) -> Result<UpdateInfo, String> {
     let client = reqwest::Client::builder()
         .user_agent("DuLog-Updater/1.0")
         .build()
@@ -129,7 +129,9 @@ pub async fn check_update() -> Result<UpdateInfo, String> {
         .await
         .map_err(|e| format!("解析 GitHub 响应失败: {e}"))?;
 
-    let cur = current_version();
+    // 优先使用前端传入的版本（来自 tauri.conf.json / package.json），
+    // 回退到 Cargo.toml 的编译时版本。
+    let cur = current_ver.unwrap_or_else(|| current_version());
     let has_update = is_newer(&release.tag_name, &cur);
 
     // 匹配当前平台的资源

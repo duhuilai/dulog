@@ -71,8 +71,9 @@ export async function saveToFile(content: string): Promise<string | null> {
 
 // ===================== 更新检查 =====================
 
-/** 检查 GitHub 是否有新版本 */
-export const checkUpdate = () => invoke<UpdateInfo>("check_update");
+/** 检查 GitHub 是否有新版本（传入当前版本号，确保与 tauri.conf.json 一致） */
+export const checkUpdate = (currentVersion?: string) =>
+  invoke<UpdateInfo>("check_update", { currentVer: currentVersion ?? null });
 
 /** 下载更新文件，返回保存路径。下载过程中通过 "download-progress" 事件推送进度。 */
 export const downloadUpdate = (downloadUrl: string) =>
