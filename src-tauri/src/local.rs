@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use memmap2::Mmap;
 use regex::Regex;
@@ -16,42 +16,62 @@ pub struct LocalFile {
     /// 懒加载行偏移检查点：第 1 行偏移固定为 0，后续按 CHECKPOINT_INTERVAL
     /// 间隔在首次读取到对应行时构建。使用 RefCell 支持在 read_local 中就地扩展。
     pub checkpoints: RefCell<Vec<u64>>,
-    /// 估算总行数（基于首 8KB 采样推算），非精确值但滚动偏差通常 <5%
-    pub total_lines: u64,
+    /// 估算总行数。用 Cell 以支持 read_local 读到文件末尾时就地校正（避免估算
+    /// 偏小导致虚拟滚动占位高度不足、跳转被浏览器截断）。
+    pub total_lines: Cell<u64>,
+}
+
+/// 多区域采样估算总行数：仅采样文件开头容易因局部行长度异常导致整体估算
+/// 严重偏低（例如开头刚好是几条超长行），故同时采样首部/中部/尾部多个 8KB
+/// 区间，取平均行长推算，偏差远小于单点采样。
+fn estimate_total_lines(bytes: &[u8]) -> u64 {
+    let len = bytes.len();
+    if len == 0 {
+        return 0;
+    }
+    const SAMPLE: usize = 8192;
+    // 采样区域：开头、1/4、1/2、3/4、末尾
+    let anchors = [0usize, len / 4, len / 2, 3 * len / 4, len.saturating_sub(SAMPLE)];
+    let mut avg_lens: Vec<f64> = Vec::new();
+    for &a in &anchors {
+        let end = (a + SAMPLE).min(len);
+        if end <= a {
+            continue;
+        }
+        let region = &bytes[a..end];
+        let newlines = region.iter().filter(|&&b| b == b'\n').count();
+        if newlines > 0 {
+            // 该区间平均行长 = 区间字节数 / (换行数 + 1)
+            let avg = (end - a) as f64 / (newlines as f64 + 1.0);
+            avg_lens.push(avg);
+        }
+    }
+    if avg_lens.is_empty() {
+        // 无换行符 → 单行或二进制，保守估计
+        return (len as u64 / 200).max(1);
+    }
+    let mean: f64 = avg_lens.iter().sum::<f64>() / avg_lens.len() as f64;
+    // 向下取保守估计（宁可偏大不可偏小，避免占位不足），但给 20% 余量防止极端
+    let est = (len as f64 / mean).ceil();
+    (est as u64).max(1)
 }
 
 /// 打开本地文件，不再预先全量扫描建索引。
 /// - 文件大小通过 mmap.len() 瞬时获取（O(1)）
-/// - 总行数通过采样首 8KB 估算（O(1)）
+/// - 总行数通过多区域采样估算（O(1)）
 /// - 检查点首次读取时按需构建（懒加载）
 ///
 /// 对比旧方案的全量字节扫描（90GB 耗时数分钟），新方案打开时间与文件大小无关。
 pub fn open_local(path: &str) -> Result<LocalFile, String> {
     let file = std::fs::File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
     let mmap = unsafe { Mmap::map(&file).map_err(|e| format!("内存映射失败: {e}"))? };
-    let len = mmap.len();
-
-    // 采样首 8KB 估算总行数
-    let total_lines = if len == 0 {
-        0
-    } else {
-        let sample_end = 8192usize.min(len);
-        let sample = &mmap[..sample_end];
-        let sample_lines = sample.iter().filter(|&&b| b == b'\n').count() as u64;
-        if sample_lines > 0 && sample_end > 0 {
-            // 末尾可能无换行符，+1 补偿
-            len as u64 * sample_lines / sample_end as u64 + 1
-        } else {
-            // 无换行符 → 单行文件或二进制，保守估计
-            (len as u64 / 200).max(1)
-        }
-    };
+    let total_lines = estimate_total_lines(&mmap[..]);
 
     Ok(LocalFile {
         path: std::path::PathBuf::from(path),
         mmap,
         checkpoints: RefCell::new(vec![0]), // 仅行 1 偏移
-        total_lines,
+        total_lines: Cell::new(total_lines),
     })
 }
 
@@ -137,6 +157,16 @@ pub fn read_local(f: &LocalFile, start: u64, count: u64) -> Vec<LogLine> {
         line_no += 1;
         pos = i + 1;
     }
+
+    // 自校正：若本次读取触达文件末尾，则精确已知总行数 = 最后读到的行号。
+    // 这会修正 open 阶段可能偏小的估算，避免虚拟滚动占位高度不足。
+    if pos >= len && !out.is_empty() {
+        let last = out.last().unwrap().line;
+        if last > f.total_lines.get() {
+            f.total_lines.set(last);
+        }
+    }
+
     out
 }
 

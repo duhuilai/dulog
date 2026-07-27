@@ -212,7 +212,7 @@ async fn open_file(
             let f = local::open_local(&target.path)?;
             let meta = FileMeta {
                 size: f.mmap.len() as u64,
-                total_lines: f.total_lines,
+                total_lines: f.total_lines.get(),
             };
             *state.active.lock().unwrap() = Some(ActiveSource::Local(f));
             Ok(meta)
