@@ -1281,25 +1281,30 @@ mark.hl {
   margin-right: 0;
 }
 
-/* 设置按钮在顶栏 */
-.topbar .btn-settings {
-  width: 30px;
-  height: 30px;
+/* 左栏底部设置入口 */
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.sidebar-footer .btn-settings {
+  width: 100%;
+  padding: 7px 10px;
   border: none;
   background: transparent;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 12.5px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   color: var(--muted);
   transition: background 0.12s, color 0.12s;
-  margin-left: auto;
-  flex-shrink: 0;
 }
 
-.topbar .btn-settings:hover {
+.sidebar-footer .btn-settings:hover {
   background: var(--row-alt);
   color: var(--text);
 }

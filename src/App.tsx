@@ -434,13 +434,6 @@ export default function App() {
       <header className="topbar">
         <div className="brand">DuLog</div>
         <button
-          className="btn-settings"
-          title="设置"
-          onClick={() => setShowSettings(true)}
-        >
-          ⚙
-        </button>
-        <button
           className="btn-toggle"
           title="SSH 诊断"
           onClick={async () => {
@@ -451,7 +444,7 @@ export default function App() {
               setError(String(e));
             }
           }}
-          style={{ fontSize: 11, padding: "2px 8px", width: "auto", marginLeft: 8 }}
+          style={{ fontSize: 11, padding: "2px 8px", width: "auto", marginLeft: "auto" }}
         >
           🔍 诊断
         </button>
@@ -652,6 +645,17 @@ export default function App() {
                 )}
             </div>
           )}
+
+          {/* 左栏底部设置入口 */}
+          <div className="sidebar-footer">
+            <button
+              className="btn-settings"
+              title="设置"
+              onClick={() => setShowSettings(true)}
+            >
+              ⚙ 设置
+            </button>
+          </div>
         </aside>
 
         {/* ---- 主区域 ---- */}

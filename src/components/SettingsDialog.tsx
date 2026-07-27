@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import type { DownloadProgress, UpdateInfo } from "../types";
 import * as api from "../api";
 
@@ -28,6 +29,14 @@ export function SettingsDialog({ onClose }: Props) {
   const [errorMsg, setErrorMsg] = useState("");
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [savePath, setSavePath] = useState("");
+  const [currentVersion, setCurrentVersion] = useState<string>("");
+
+  // 挂载时获取当前应用版本
+  useEffect(() => {
+    getVersion()
+      .then((v) => setCurrentVersion(v))
+      .catch(() => setCurrentVersion(""));
+  }, []);
 
   // ---- 检查更新 ----
   const doCheck = useCallback(async () => {
@@ -102,7 +111,7 @@ export function SettingsDialog({ onClose }: Props) {
           <div className="settings-row">
             <span>当前版本</span>
             <span className="settings-value">
-              v{updateInfo?.current_version ?? "—"}
+              {currentVersion ? `v${currentVersion}` : "v—"}
             </span>
           </div>
         </div>
