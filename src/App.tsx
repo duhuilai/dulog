@@ -16,6 +16,7 @@ import { StatusBar } from "./components/StatusBar";
 import { LogViewer } from "./components/LogViewer";
 import { TextEditor } from "./components/TextEditor";
 import { ConnectionDialog } from "./components/ConnectionDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { DeleteConfirm } from "./components/DeleteConfirm";
 
 function formatBytes(n: number): string {
@@ -54,6 +55,7 @@ export default function App() {
     y: number;
   } | null>(null);
   const [activeConnIdx, setActiveConnIdx] = useState<number | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   // ===== 检索 =====
   const [pattern, setPattern] = useState("");
@@ -432,6 +434,13 @@ export default function App() {
       <header className="topbar">
         <div className="brand">DuLog</div>
         <button
+          className="btn-settings"
+          title="设置"
+          onClick={() => setShowSettings(true)}
+        >
+          ⚙
+        </button>
+        <button
           className="btn-toggle"
           title="SSH 诊断"
           onClick={async () => {
@@ -683,6 +692,7 @@ export default function App() {
                   target={activeTab.target!}
                   highlights={highlights}
                   jump={jump}
+                  activeLine={matchIdx >= 0 ? matches[matchIdx]?.line : undefined}
                 />
                 {matches.length > 0 && (
                   <div className="matchpanel">
@@ -738,6 +748,10 @@ export default function App() {
         />
       )}
 
+      {showSettings && (
+        <SettingsDialog onClose={() => setShowSettings(false)} />
+      )}
+
       {deleteTarget && (
         <DeleteConfirm
           name={deleteTarget.conn.alias}
@@ -748,7 +762,14 @@ export default function App() {
         />
       )}
 
-      {error && <div className="toast-error">{error}</div>}
+      {searching && (
+        <div className="modal-mask" style={{ background: "rgba(0,0,0,0.2)" }}>
+          <div className="loading-modal">
+            <span className="btn-spinner" />
+            <span>检索中…</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

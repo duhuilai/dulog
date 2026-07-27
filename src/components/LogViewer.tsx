@@ -7,6 +7,7 @@ interface Props {
   target: FileTarget;
   highlights: Map<number, MatchRange[]>;
   jump: { line: number; nonce: number } | null;
+  activeLine?: number;
 }
 
 const ROW_H = 22; // 单行像素高度
@@ -18,7 +19,7 @@ const PAGE = 500; // 每次向后端请求的连续行数
  * - 按需分页向后端请求行内容（懒加载），首次打开即时可用。
  * - 命中检索的行按区间高亮（<mark>），仅可视行参与渲染。
  */
-export function LogViewer({ meta, target, highlights, jump }: Props) {
+export function LogViewer({ meta, target, highlights, jump, activeLine }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(600);
@@ -47,13 +48,6 @@ export function LogViewer({ meta, target, highlights, jump }: Props) {
     setScrollTop(0);
     if (containerRef.current) containerRef.current.scrollTop = 0;
   }, [target]);
-
-  // 跳转到指定行
-  useEffect(() => {
-    if (jump && containerRef.current) {
-      containerRef.current.scrollTop = (jump.line - 1) * ROW_H;
-    }
-  }, [jump]);
 
   const startIdx = Math.max(0, Math.floor(scrollTop / ROW_H) - 5);
   const visible = Math.ceil(viewportH / ROW_H) + 12;
@@ -96,10 +90,26 @@ export function LogViewer({ meta, target, highlights, jump }: Props) {
     [loadPage]
   );
 
+  // 可视区行按需加载
   useEffect(() => {
     if (total === 0) return;
     ensureLoaded(startIdx + 1, endIdx);
   }, [startIdx, endIdx, total, ensureLoaded]);
+
+  // 跳转到指定行：同步更新 DOM 和 React state，并立即预加载目标区域
+  useEffect(() => {
+    if (jump && containerRef.current) {
+      const targetLine = Math.max(1, Math.min(jump.line, total));
+      const targetScrollTop = (targetLine - 1) * ROW_H;
+      containerRef.current.scrollTop = targetScrollTop;
+      setScrollTop(targetScrollTop);
+
+      // 立即预加载目标行附近的内容，避免跳转后显示空白
+      const preloadStart = Math.max(1, targetLine - PAGE / 2);
+      const preloadEnd = Math.min(total, targetLine + PAGE / 2);
+      ensureLoaded(preloadStart, preloadEnd);
+    }
+  }, [jump, total, ensureLoaded]);
 
   const rows = [];
   for (let l = startIdx + 1; l <= endIdx; l++) {
@@ -111,6 +121,7 @@ export function LogViewer({ meta, target, highlights, jump }: Props) {
         text={text ?? ""}
         loaded={text !== undefined}
         ranges={highlights.get(l)}
+        isActive={l === activeLine}
       />
     );
   }
@@ -138,14 +149,16 @@ function LogRow({
   text,
   loaded,
   ranges,
+  isActive,
 }: {
   line: number;
   text: string;
   loaded: boolean;
   ranges?: MatchRange[];
+  isActive?: boolean;
 }) {
   return (
-    <div className="log-row" style={{ height: ROW_H }}>
+    <div className={`log-row${isActive ? " active-line" : ""}`} style={{ height: ROW_H }}>
       <span className="ln">{line}</span>
       <span className="lt">
         {!loaded ? (

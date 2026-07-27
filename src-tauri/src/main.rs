@@ -2,6 +2,7 @@
 
 mod local;
 mod remote;
+mod updater;
 
 use std::sync::{Arc, Mutex};
 
@@ -389,7 +390,10 @@ fn main() {
             open_file,
             read_lines,
             search,
-            save_file
+            save_file,
+            updater::check_update,
+            updater::download_update,
+            updater::install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running DuLog");

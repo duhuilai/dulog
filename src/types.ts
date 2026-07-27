@@ -69,3 +69,20 @@ export interface EditorTab {
   /** 正在加载文件元数据 */
   loading?: boolean;
 }
+
+// ===================== 更新检查 =====================
+
+export interface UpdateInfo {
+  current_version: string;
+  latest_version: string;
+  has_update: boolean;
+  body: string;
+  download_url: string;
+  file_size: number;
+  published_at: string;
+}
+
+export interface DownloadProgress {
+  received: number;
+  total: number;
+}

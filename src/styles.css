@@ -1103,3 +1103,203 @@ mark.hl {
   color: var(--muted);
   font-size: 13px;
 }
+
+/* ========================================
+   设置对话框 (SettingsDialog)
+   ======================================== */
+.settings-section {
+  margin-bottom: 16px;
+}
+
+.settings-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.settings-value {
+  font-weight: 600;
+  color: var(--primary);
+  font-family: "Cascadia Code", "Consolas", monospace;
+}
+
+/* 更新状态卡片 */
+.update-card {
+  margin-top: 8px;
+}
+
+.update-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.update-status.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.update-status.info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.update-status.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.update-icon {
+  font-size: 16px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.update-status.success .update-icon {
+  color: #059669;
+  background: #d1fae5;
+}
+
+.update-status.info .update-icon {
+  color: #2563eb;
+  background: #dbeafe;
+}
+
+.update-status.error .update-icon {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.update-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.update-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Release Notes */
+.release-notes {
+  margin-top: 10px;
+}
+
+.release-notes-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.release-notes-body {
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.6;
+}
+
+/* 下载进度 */
+.update-downloading {
+  margin-top: 8px;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progress-pct {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 4px;
+  text-align: right;
+}
+
+/* 检索中弹窗 */
+.loading-modal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px 28px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.loading-modal .btn-spinner {
+  border-color: rgba(47, 111, 235, 0.25);
+  border-top-color: var(--primary);
+  margin-right: 0;
+}
+
+/* 设置按钮在顶栏 */
+.topbar .btn-settings {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: background 0.12s, color 0.12s;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.topbar .btn-settings:hover {
+  background: var(--row-alt);
+  color: var(--text);
+}

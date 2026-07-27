@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { listen } from "@tauri-apps/api/event";
 import type {
   FileEntry,
   FileMeta,
@@ -7,6 +8,8 @@ import type {
   LogLine,
   SearchResult,
   SshConfig,
+  UpdateInfo,
+  DownloadProgress,
 } from "./types";
 
 /** 调起系统原生文件夹选择框（Windows 资源管理器）。 */
@@ -65,3 +68,26 @@ export async function saveToFile(content: string): Promise<string | null> {
   await invoke<void>("save_file", { path, content });
   return path;
 }
+
+// ===================== 更新检查 =====================
+
+/** 检查 GitHub 是否有新版本 */
+export const checkUpdate = () => invoke<UpdateInfo>("check_update");
+
+/** 下载更新文件，返回保存路径。下载过程中通过 "download-progress" 事件推送进度。 */
+export const downloadUpdate = (downloadUrl: string) =>
+  invoke<string>("download_update", { downloadUrl });
+
+/** 打开下载的安装包 */
+export const installUpdate = (filePath: string) =>
+  invoke<void>("install_update", { filePath });
+
+/** 监听下载进度事件 */
+export const onDownloadProgress = (
+  callback: (progress: DownloadProgress) => void
+) => {
+  const unlisten = listen<DownloadProgress>("download-progress", (event) => {
+    callback(event.payload);
+  });
+  return unlisten;
+};

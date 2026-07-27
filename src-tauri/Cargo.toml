@@ -1,6 +1,6 @@
 [package]
 name = "dulog"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 description = "大日志检索工具：本地 mmap + SSH 远程，支持超大文件与高亮"
 authors = ["dulog"]
@@ -19,3 +19,6 @@ tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 russh = "0.45"
 russh-keys = "0.45"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
+dirs-next = "2"
