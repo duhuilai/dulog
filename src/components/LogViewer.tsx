@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FileTarget, MatchRange } from "../types";
 import { readLines } from "../api";
 
@@ -27,6 +27,8 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
   const cacheRef = useRef(cache);
   cacheRef.current = cache;
   const loadingRef = useRef<Set<number>>(new Set());
+  /** 跳转期间阻止 onScroll 覆盖 scrollTop state */
+  const jumpingRef = useRef(false);
 
   const total = meta.total_lines;
 
@@ -96,20 +98,29 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
     ensureLoaded(startIdx + 1, endIdx);
   }, [startIdx, endIdx, total, ensureLoaded]);
 
-  // 跳转到指定行：同步更新 DOM 和 React state，并立即预加载目标区域
-  useEffect(() => {
-    if (jump && containerRef.current) {
-      const targetLine = Math.max(1, Math.min(jump.line, total));
-      const targetScrollTop = (targetLine - 1) * ROW_H;
-      containerRef.current.scrollTop = targetScrollTop;
-      setScrollTop(targetScrollTop);
+  // 跳转到指定行：用 useLayoutEffect 同步 DOM 改动 + jumpingRef 阻止 onScroll 覆盖
+  useLayoutEffect(() => {
+    if (!jump || !containerRef.current || total === 0) return;
 
-      // 立即预加载目标行附近的内容，避免跳转后显示空白
-      const preloadStart = Math.max(1, targetLine - PAGE / 2);
-      const preloadEnd = Math.min(total, targetLine + PAGE / 2);
-      ensureLoaded(preloadStart, preloadEnd);
-    }
-  }, [jump, total, ensureLoaded]);
+    const targetLine = Math.max(1, Math.min(jump.line, total));
+    const targetScrollTop = (targetLine - 1) * ROW_H;
+
+    // 启用跳转标记，阻止 onScroll 覆盖
+    jumpingRef.current = true;
+    containerRef.current.scrollTop = targetScrollTop;
+    setScrollTop(targetScrollTop);
+
+    // 预加载目标区域内容
+    const preloadStart = Math.max(1, targetLine - PAGE / 2);
+    const preloadEnd = Math.min(total, targetLine + PAGE / 2);
+    ensureLoaded(preloadStart, preloadEnd);
+
+    // 下一个 rAF 中释放标记（此时 scroll 事件已经处理完毕）
+    requestAnimationFrame(() => {
+      jumpingRef.current = false;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jump, total]);
 
   const rows = [];
   for (let l = startIdx + 1; l <= endIdx; l++) {
@@ -130,7 +141,10 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
     <div
       className="viewer"
       ref={containerRef}
-      onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
+      onScroll={(e) => {
+        if (jumpingRef.current) return;
+        setScrollTop((e.target as HTMLDivElement).scrollTop);
+      }}
     >
       <div className="viewer-spacer" style={{ height: total * ROW_H }}>
         <div
