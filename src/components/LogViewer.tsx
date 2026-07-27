@@ -77,8 +77,9 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
     if (containerRef.current) containerRef.current.scrollTop = 0;
   }, [target]);
 
-  // ====== 有效总行数：后端估算可能偏小，用已加载最大行号动态扩展 ======
-  const effectiveTotal = Math.max(total, maxKnownLine + PAGE * 2);
+  // ====== 有效总行数：后端估算可能偏小，用「已加载最大行号 + 余量」动态扩展 ======
+  // 始终保留 PAGE*4 行余量，确保滚动到底部附近时仍能继续向下扩展（无限滚动）。
+  const effectiveTotal = Math.max(total, maxKnownLine) + PAGE * 4;
 
   // ====== 可视区计算（基于有效滚动位置）======
   const startIdx = Math.max(0, Math.floor(effectiveScrollTop / ROW_H) - 5);
@@ -91,16 +92,18 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
       for (let l = s; l <= e; l++) loadingRef.current.add(l);
       try {
         const lines = await readLines(s, e - s + 1);
+        let maxLine = 0;
         setCache((prev) => {
           const next = new Map(prev);
-          let maxLine = 0;
           for (const ln of lines) {
             next.set(ln.line, ln.text);
             if (ln.line > maxLine) maxLine = ln.line;
           }
-          if (maxLine > 0) setMaxKnownLine((prevMax) => Math.max(prevMax, maxLine));
           return next;
         });
+        // 注意：必须在 setCache 的 updater 之外更新 maxKnownLine，
+        // React 不允许在另一个 setState 的 updater 函数内调用 setState。
+        if (maxLine > 0) setMaxKnownLine((prevMax) => Math.max(prevMax, maxLine));
       } catch (err) {
         console.error("读取行失败:", err);
       } finally {
@@ -138,34 +141,38 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
   useEffect(() => {
     if (!jump || !containerRef.current || total === 0) return;
 
-    const targetLine = Math.max(1, Math.min(jump.line, total));
+    // 关键：不按估算 total 截断！跳转目标以搜索结果的实际行号为准，
+    // 否则会被偏小的估算值截掉（例如实际 1300 万行被截到 152 万行）。
+    const targetLine = Math.max(1, jump.line);
     const targetScrollTop = (targetLine - 1) * ROW_H;
 
     // 清除之前的定时器
     if (forceTimerRef.current) clearTimeout(forceTimerRef.current);
 
-    // 1. 进入强制模式：设置覆盖值
-    setForcedScrollTop(targetScrollTop);
-
-    // 2. 同步 DOM 滚动位置
-    containerRef.current.scrollTop = targetScrollTop;
-
-    // 3. 立即扩展已知最大行号，确保占位高度足以容纳跳转目标（不被浏览器截断）
+    // 1. 先扩展已知行范围，使占位高度（spacer）足够容纳跳转目标。
+    //    下一次渲染时 effectiveTotal 随之变大，避免 DOM scrollTop 被旧高度截断。
     setMaxKnownLine((prev) => Math.max(prev, targetLine + PAGE / 2));
 
-    // 4. 立即预加载目标行附近的内容
+    // 2. 进入强制模式：驱动渲染位置
+    setForcedScrollTop(targetScrollTop);
+
+    // 3. 立即预加载目标行附近的内容（后端按真实文件读取，不受估算 total 限制）
     const preloadStart = Math.max(1, targetLine - PAGE / 2);
-    const preloadEnd = Math.min(total, targetLine + PAGE / 2);
+    const preloadEnd = targetLine + PAGE / 2;
     ensureLoaded(preloadStart, preloadEnd);
 
-    // 4. 延迟退出强制模式，给浏览器足够时间完成所有异步 scroll 事件
+    // 4. 等占位高度（spacer）更新后再设置 DOM 滚动位置，避免被旧高度截断。
+    //    用 rAF + 退出时的兜底设置双保险。
+    requestAnimationFrame(() => {
+      if (containerRef.current) containerRef.current.scrollTop = targetScrollTop;
+    });
+
+    // 5. 延迟退出强制模式，并在退出前再次确保 DOM 滚动位置正确
     forceTimerRef.current = setTimeout(() => {
+      if (containerRef.current) containerRef.current.scrollTop = targetScrollTop;
       setForcedScrollTop(null);
       forceTimerRef.current = null;
-      // 退出时同步 DOM 的最终位置到 state，确保无缝衔接
-      if (containerRef.current) {
-        setScrollTop(containerRef.current.scrollTop);
-      }
+      if (containerRef.current) setScrollTop(containerRef.current.scrollTop);
     }, FORCE_SCROLL_MS);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,7 +190,15 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
     (e: React.UIEvent<HTMLDivElement>) => {
       // 强制模式下完全忽略 scroll 事件，防止竞态覆盖
       if (forcedScrollTop !== null) return;
-      setScrollTop((e.target as HTMLDivElement).scrollTop);
+      const el = e.target as HTMLDivElement;
+      const st = el.scrollTop;
+      setScrollTop(st);
+      // 接近底部时扩展已知行范围，避免占位不足导致无法继续向下滚动
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if (st >= maxScroll - ROW_H * 20) {
+        const approxLine = Math.floor(st / ROW_H) + PAGE * 4;
+        setMaxKnownLine((prev) => Math.max(prev, approxLine));
+      }
     },
     [forcedScrollTop]
   );
