@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileTarget, MatchRange } from "../types";
 import { readLines } from "../api";
 
@@ -27,8 +27,11 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
   const cacheRef = useRef(cache);
   cacheRef.current = cache;
   const loadingRef = useRef<Set<number>>(new Set());
-  /** 跳转期间阻止 onScroll 覆盖 scrollTop state */
-  const jumpingRef = useRef(false);
+  /**
+   * 记录最近一次程序化跳转的目标 scrollTop，
+   * 用于在 onScroll 中区分「用户手动滚动」和「代码触发的滚动事件」。
+   */
+  const programmedScrollTo = useRef<number | null>(null);
 
   const total = meta.total_lines;
 
@@ -48,6 +51,7 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
     cacheRef.current = new Map();
     loadingRef.current.clear();
     setScrollTop(0);
+    programmedScrollTo.current = null;
     if (containerRef.current) containerRef.current.scrollTop = 0;
   }, [target]);
 
@@ -98,29 +102,45 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
     ensureLoaded(startIdx + 1, endIdx);
   }, [startIdx, endIdx, total, ensureLoaded]);
 
-  // 跳转到指定行：用 useLayoutEffect 同步 DOM 改动 + jumpingRef 阻止 onScroll 覆盖
-  useLayoutEffect(() => {
+  // 跳转到指定行：直接设 DOM scrollTop + 同步 React state + 预加载目标区域
+  useEffect(() => {
     if (!jump || !containerRef.current || total === 0) return;
 
     const targetLine = Math.max(1, Math.min(jump.line, total));
     const targetScrollTop = (targetLine - 1) * ROW_H;
 
-    // 启用跳转标记，阻止 onScroll 覆盖
-    jumpingRef.current = true;
+    // 标记本次为程序化跳转（用于 onScroll 判断）
+    programmedScrollTo.current = targetScrollTop;
     containerRef.current.scrollTop = targetScrollTop;
     setScrollTop(targetScrollTop);
 
-    // 预加载目标区域内容
+    // 立即预加载目标行附近的内容
     const preloadStart = Math.max(1, targetLine - PAGE / 2);
     const preloadEnd = Math.min(total, targetLine + PAGE / 2);
     ensureLoaded(preloadStart, preloadEnd);
 
-    // 下一个 rAF 中释放标记（此时 scroll 事件已经处理完毕）
-    requestAnimationFrame(() => {
-      jumpingRef.current = false;
-    });
+    // 在下一个事件循环清除标记，让后续手动滚动恢复正常
+    setTimeout(() => {
+      programmedScrollTo.current = null;
+    }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jump, total]);
+
+  const handleScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const st = (e.target as HTMLDivElement).scrollTop;
+      // 如果当前 scrollTop 与程序化跳转目标一致，说明是代码触发的事件，忽略
+      if (
+        programmedScrollTo.current !== null &&
+        Math.abs(st - programmedScrollTo.current) < 2
+      ) {
+        return;
+      }
+      programmedScrollTo.current = null;
+      setScrollTop(st);
+    },
+    []
+  );
 
   const rows = [];
   for (let l = startIdx + 1; l <= endIdx; l++) {
@@ -141,10 +161,7 @@ export function LogViewer({ meta, target, highlights, jump, activeLine }: Props)
     <div
       className="viewer"
       ref={containerRef}
-      onScroll={(e) => {
-        if (jumpingRef.current) return;
-        setScrollTop((e.target as HTMLDivElement).scrollTop);
-      }}
+      onScroll={handleScroll}
     >
       <div className="viewer-spacer" style={{ height: total * ROW_H }}>
         <div
